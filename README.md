@@ -1,56 +1,57 @@
 # aiokafka-client
 
-Reusable async Kafka consumer/producer with SSL/SASL support.
+Reusable async Kafka consumer/producer with SSL/SASL support and structured logging.
 
-## Install
+## Setup
 
 ```bash
-pip install git+https://github.com/yourname/aiokafka-client.git
+uv venv
+source .venv/bin/activate
+uv sync
 ```
 
-## Usage
+## Configuration
 
-### Config
-```python
-from kafka_client import KafkaConfig
-
-config = KafkaConfig(
-    bootstrap_servers="localhost:9092",
-    topic="my.topic",
-    group_id="my-group",
-    # For Yandex Cloud / SASL_SSL:
-    security_protocol="SASL_SSL",
-    sasl_mechanism="SCRAM-SHA-512",
-    sasl_plain_username="user",
-    sasl_plain_password="pass",
-    cafile="/path/to/YandexInternalRootCA.crt",
-)
+```bash
+cp .env.example .env
 ```
 
-### Producer only
-```python
-client = KafkaClient(config)
-await client.start()
-await client._send({"type": "my_event", "id": 1})
-await client.stop()
+## Run
+
+```bash
+# Consumer loop
+uv run python -m app.main
+
+# Publish messages manually
+uv run python -m scripts.publish
 ```
 
-### Producer + Consumer
-```python
-await client.start(consume=True)
-msg = await client.consumer.getone()
-```
+## Extend
 
-### Subclass for domain messages
+Subclass `KafkaClient` to add domain messages:
+
 ```python
+from app.kafka_client import KafkaClient
+
 class AppKafkaClient(KafkaClient):
     async def queue_index_file(self, file_data: dict) -> None:
         await self._send({**file_data, "type": "index_file"}, key=f"file_{file_data['id']}")
+
+    async def queue_delete_file(self, file_id: int, project_id: int) -> None:
+        await self._send(
+            {"type": "delete_file", "id": file_id, "project_id": project_id},
+            key=f"file_{file_id}",
+        )
 ```
 
-## Local vs Yandex Cloud
+## Structure
 
-| Env | `security_protocol` | credentials | `cafile` |
-|-----|-------------------|-------------|--------|
-| Local Docker | `PLAINTEXT` | not needed | not needed |
-| Yandex Cloud | `SASL_SSL` | required | required |
+```
+app/
+  kafka_client/    # BaseConsumer, BaseProducer, KafkaClient, KafkaConfig
+  core/            # AppConfig, logger
+  enums/           # AppMode
+  main.py          # Consume loop reference
+scripts/
+  publish.py       # Manual publish reference
+```
